@@ -8,7 +8,6 @@
   <script src="/socket.io/socket.io.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    /* Menggunakan CSS Cantik yang kamu kirim sebelumnya */
     :root { --primary: #667eea; --success: #2ecc71; --warning: #f39c12; --danger: #e74c3c; --info: #3498db; --dark: #2c3e50; --light: #f8f9fa; }
     body { font-family: 'Segoe UI', sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; margin: 0; }
     .dashboard-container { max-width: 1400px; margin: 0 auto; padding: 20px; }
@@ -18,7 +17,7 @@
     .stats-grid { grid-template-columns: repeat(4, 1fr); }
     .balance-card { background: linear-gradient(135deg, var(--primary) 0%, #764ba2 100%); border-radius: 15px; padding: 25px; color: white; box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3); }
     .stat-card { background: white; border-radius: 15px; padding: 25px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); position: relative; }
-    .btn { padding: 12px 24px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; }
+    .btn { padding: 12px 24px; border: none; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.3s; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
     .btn-primary { background: var(--primary); color: white; }
     .btn-success { background: var(--success); color: white; }
     .btn-danger { background: var(--danger); color: white; }
@@ -32,64 +31,62 @@
     .loading-spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     @media (max-width: 768px) { .stats-grid, .balance-grid { grid-template-columns: 1fr; } }
+    .logout-btn { background: none; border: 1px solid var(--danger); color: var(--danger); padding: 5px 15px; border-radius: 8px; cursor: pointer; }
+    .logout-btn:hover { background: var(--danger); color: white; }
   </style>
 </head>
 <body>
   <div class="dashboard-container">
     <nav class="navbar">
-      <h1><span>📱</span> My Blast Dashboard</h1>
-      <div class="user-info">
-        <span class="username-badge" id="displayUsername">Loading...</span>
+      <h1 style="font-size: 1.5rem; margin: 0;"><span>📱</span> My Blast Dashboard</h1>
+      <div class="user-info d-flex align-items-center gap-3">
+        <span class="badge bg-light text-dark p-2" id="displayUsername">Loading...</span>
         <button class="logout-btn" onclick="logout()"><span>🚪</span> Logout</button>
       </div>
     </nav>
 
     <div class="balance-grid">
       <div class="balance-card">
-        <div class="balance-label">Saldo Saat Ini</div>
-        <div class="balance-value" id="currentBalance">Rp 0</div>
+        <div class="balance-label opacity-75">Saldo Saat Ini</div>
+        <div class="balance-value fs-2 fw-bold" id="currentBalance">Rp 0</div>
       </div>
       <div class="balance-card" style="background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);">
-        <div class="balance-label">Pending Withdraw</div>
-        <div class="balance-value" id="pendingBalance">Rp 0</div>
+        <div class="balance-label opacity-75">Pending Withdraw</div>
+        <div class="balance-value fs-2 fw-bold" id="pendingBalance">Rp 0</div>
       </div>
       <div class="balance-card" style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);">
-        <div class="balance-label">Total Penghasilan</div>
-        <div class="balance-value" id="totalEarned">Rp 0</div>
+        <div class="balance-label opacity-75">Tarif Per Pesan</div>
+        <div class="balance-value fs-2 fw-bold" id="tarifDisplay">Rp ...</div>
+        <small class="opacity-75">*Tarif dari admin</small>
       </div>
-      <div class="card p-3 mb-3 bg-primary text-white">
-    <h6 class="mb-1">Estimasi Pendapatan</h6>
-    <h4 id="tarifDisplay" class="fw-bold">Tarif: Rp .../chat</h4>
-    <small>*Tarif dapat berubah sewaktu-waktu oleh admin</small>
-</div>
     </div>
 
     <div class="stats-grid">
       <div class="stat-card">
-        <div class="stat-label">Total Akun</div>
-        <div class="stat-value" id="totalAccounts">0</div>
+        <div class="stat-label text-muted small">Total Akun</div>
+        <div class="stat-value fs-3 fw-bold" id="totalAccounts">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Terhubung</div>
-        <div class="stat-value" id="connectedAccounts">0</div>
+        <div class="stat-label text-muted small">Akun Terhubung</div>
+        <div class="stat-value fs-3 fw-bold text-success" id="connectedAccounts">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Total Blast Sukses</div>
-        <div class="stat-value" id="totalBlasted">0</div>
+        <div class="stat-label text-muted small">Total Blast Sukses</div>
+        <div class="stat-value fs-3 fw-bold text-primary" id="totalBlasted">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Estimasi Hari Ini</div>
-        <div class="stat-value" id="todayEarnings">Rp 0</div>
+        <div class="stat-label text-muted small">Total Penghasilan</div>
+        <div class="stat-value fs-3 fw-bold text-warning" id="totalEarned">Rp 0</div>
       </div>
     </div>
 
-    <div class="action-bar">
-      <h2 style="color: white;">Akun WhatsApp Saya</h2>
+    <div class="action-bar d-flex justify-content-between align-items-center mb-4">
+      <h2 style="color: white; margin: 0;">Akun WhatsApp Saya</h2>
       <button class="btn btn-success" onclick="openModal('addAccountModal')"><span>➕</span> Tambah Akun</button>
     </div>
 
     <div class="accounts-grid" id="accountsList">
-      </div>
+        </div>
 
     <div style="text-align: right; margin-top: 30px;">
       <button class="btn btn-primary" onclick="openModal('withdrawModal')"><span>💰</span> Tarik Saldo</button>
@@ -98,44 +95,44 @@
 
   <div id="addAccountModal" class="modal">
     <div class="modal-content">
-      <span class="close" onclick="closeModal('addAccountModal')" style="cursor:pointer; float:right;">&times;</span>
-      <h2>Tambah Nomor WA</h2>
-      <form id="addAccountForm" style="margin-top:20px;">
+      <span class="close" onclick="closeModal('addAccountModal')" style="cursor:pointer; float:right; font-size: 24px;">&times;</span>
+      <h2 class="mb-4">Tambah Nomor WA</h2>
+      <form id="addAccountForm">
         <div class="mb-3">
-          <label>Nomor WhatsApp (Format: 6281xxx)</label>
-          <input type="text" id="waNumber" class="form-control" placeholder="62812345678" required>
+          <label class="form-label small fw-bold">Nomor WhatsApp (Format: 6281xxx)</label>
+          <input type="text" id="waNumber" class="form-control form-control-lg" placeholder="62812345678" required>
         </div>
-        <button type="submit" class="btn btn-primary w-100">Simpan Akun</button>
+        <button type="submit" class="btn btn-primary w-100 py-3">Simpan Akun</button>
       </form>
     </div>
   </div>
 
   <div id="qrModal" class="modal">
     <div class="modal-content text-center">
-      <span class="close" onclick="closeModal('qrModal')" style="cursor:pointer; float:right;">&times;</span>
-      <h2>Scan QR Code</h2>
-      <div id="qrContainer" style="margin: 20px auto;">
+      <span class="close" onclick="closeModal('qrModal')" style="cursor:pointer; float:right; font-size: 24px;">&times;</span>
+      <h2 class="mb-3">Scan QR Code</h2>
+      <div id="qrContainer" style="margin: 20px auto; min-height: 200px;">
         <div id="qrLoading" class="loading-spinner"></div>
-        <img id="qrImage" src="" style="display:none; max-width:100%; border:1px solid #ddd; padding:10px;">
+        <img id="qrImage" src="" style="display:none; max-width:100%; border:1px solid #ddd; padding:10px; border-radius: 10px;">
       </div>
-      <p id="qrStatus">Menunggu sistem menyiapkan browser...</p>
+      <p id="qrStatus" class="text-muted">Menunggu sistem menyiapkan browser...</p>
     </div>
   </div>
 
   <div id="withdrawModal" class="modal">
     <div class="modal-content">
-      <span class="close" onclick="closeModal('withdrawModal')" style="cursor:pointer; float:right;">&times;</span>
-      <h2>Tarik Saldo</h2>
-      <form id="withdrawForm" style="margin-top:20px;">
+      <span class="close" onclick="closeModal('withdrawModal')" style="cursor:pointer; float:right; font-size: 24px;">&times;</span>
+      <h2 class="mb-4">Tarik Saldo</h2>
+      <form id="withdrawForm">
         <div class="mb-3">
-          <label>Jumlah Penarikan (Min Rp 50.000)</label>
-          <input type="number" id="wdAmount" class="form-control" min="50000" required>
+          <label class="form-label small fw-bold">Jumlah Penarikan (Min Rp 50.000)</label>
+          <input type="number" id="wdAmount" class="form-control form-control-lg" min="50000" required>
         </div>
         <div class="mb-3">
-          <label>Detail Bank & Rekening</label>
-          <textarea id="wdBank" class="form-control" placeholder="Contoh: BCA - 12345678 - A/N Nama Kamu" required></textarea>
+          <label class="form-label small fw-bold">Detail Bank & Rekening</label>
+          <textarea id="wdBank" class="form-control" rows="3" placeholder="Contoh: BCA - 12345678 - A/N Nama Kamu" required></textarea>
         </div>
-        <button type="submit" class="btn btn-success w-100">Ajukan Withdraw</button>
+        <button type="submit" class="btn btn-success w-100 py-3">Ajukan Withdraw</button>
       </form>
     </div>
   </div>
@@ -144,17 +141,15 @@
     const socket = io();
     const user = JSON.parse(localStorage.getItem('user'));
     
-    // Proteksi Halaman
     if (!user || !user.id) {
         window.location.href = '/login.html';
     }
 
     document.getElementById('displayUsername').innerText = user.username;
 
-    // Fungsi Load Semua Data
+    // --- FUNGSI LOAD DATA ---
     async function loadDashboardData() {
         try {
-            // Load Stats & Balance
             const res = await fetch(`/api/user/my-stats?userId=${user.id}`).then(r => r.json());
             document.getElementById('currentBalance').innerText = 'Rp ' + (res.balance || 0).toLocaleString();
             document.getElementById('pendingBalance').innerText = 'Rp ' + (res.pendingWd || 0).toLocaleString();
@@ -163,33 +158,39 @@
             document.getElementById('connectedAccounts').innerText = res.connectedCount || 0;
             document.getElementById('totalBlasted').innerText = res.totalSent || 0;
 
-            // Load Accounts
             const accRes = await fetch(`/api/user/my-accounts?userId=${user.id}`).then(r => r.json());
             const list = document.getElementById('accountsList');
             
             if(accRes.length === 0) {
-                list.innerHTML = `<div class="stat-card w-100 text-center">Belum ada akun. Klik tambah akun di atas.</div>`;
+                list.innerHTML = `<div class="stat-card w-100 text-center py-5">Belum ada akun. Klik tambah akun di atas.</div>`;
             } else {
                 list.innerHTML = accRes.map(acc => `
                     <div class="account-card">
                         <span class="status-badge ${acc.status === 'CONNECTED' ? 'connected' : 'disconnected'}">${acc.status}</span>
-                        <div class="account-name" style="font-weight:bold; font-size:1.2rem;">${acc.waNumber}</div>
-                        <div style="margin-top:15px;">
+                        <div class="account-name fw-bold fs-5 mb-3"><i class="fab fa-whatsapp text-success me-2"></i>${acc.waNumber}</div>
+                        <div class="d-flex gap-2">
                             ${acc.status !== 'CONNECTED' ? 
-                              `<button class="btn btn-primary btn-sm" onclick="startScan('${acc.waNumber}')">Scan QR</button>` : 
-                              `<span style="color:var(--success); font-weight:bold;">● Akif & Menghasilkan</span>`
+                              `<button class="btn btn-primary btn-sm px-3" onclick="startScan('${acc.waNumber}')">Scan QR</button>` : 
+                              `<span class="text-success small fw-bold mt-2"><i class="fas fa-check-circle"></i> Akun Aktif</span>`
                             }
-                            <button class="btn btn-danger btn-sm" onclick="deleteAccount('${acc.id}')">Hapus</button>
                         </div>
                     </div>
                 `).join('');
             }
-        } catch (err) {
-            console.error("Fetch Error:", err);
-        }
+        } catch (err) { console.error("Fetch Error:", err); }
     }
 
-    // Fungsi Tambah Akun
+    async function showCurrentTarif() {
+        try {
+            const res = await fetch('/api/settings/price').then(r => r.json());
+            const display = document.getElementById('tarifDisplay');
+            if(display) {
+                display.innerText = `Rp ${res.price.toLocaleString()}`;
+            }
+        } catch (e) { console.error("Gagal memuat tarif:", e); }
+    }
+
+    // --- FORM HANDLERS ---
     document.getElementById('addAccountForm').onsubmit = async (e) => {
         e.preventDefault();
         const waNumber = document.getElementById('waNumber').value;
@@ -199,18 +200,37 @@
             body: JSON.stringify({ userId: user.id, waNumber })
         }).then(r => r.json());
 
-        alert(res.message);
+        alert("Berhasil menambahkan nomor. Silakan Scan QR.");
         closeModal('addAccountModal');
         loadDashboardData();
     };
 
-    // Fungsi Scan QR
+    document.getElementById('withdrawForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const amount = document.getElementById('wdAmount').value;
+        const bankInfo = document.getElementById('wdBank').value;
+
+        const res = await fetch('/api/user/withdraw', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId: user.id, amount, bankInfo })
+        }).then(r => r.json());
+
+        if(res.success) {
+            alert("Permintaan penarikan berhasil diajukan!");
+            closeModal('withdrawModal');
+            loadDashboardData();
+        } else {
+            alert(res.error || "Gagal withdraw");
+        }
+    };
+
+    // --- QR SOCKET LOGIC ---
     function startScan(waNumber) {
         openModal('qrModal');
         document.getElementById('qrLoading').style.display = 'block';
         document.getElementById('qrImage').style.display = 'none';
         document.getElementById('qrStatus').innerText = "Menghubungkan ke server...";
-
         socket.emit('request_qr', { waNumber, userId: user.id });
     }
 
@@ -227,42 +247,16 @@
         loadDashboardData();
     });
 
-    // Fungsi Withdraw
-    document.getElementById('withdrawForm').onsubmit = async (e) => {
-        e.preventDefault();
-        const amount = document.getElementById('wdAmount').value;
-        const bankInfo = document.getElementById('wdBank').value;
-
-        const res = await fetch('/api/user/withdraw', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ userId: user.id, amount, bankInfo })
-        }).then(r => r.json());
-
-        alert(res.message);
-        if(!res.error) {
-            closeModal('withdrawModal');
-            loadDashboardData();
-        }
-    };
-    async function showCurrentTarif() {
-        try {
-            const res = await fetch('/api/settings/price').then(r => r.json());
-            const display = document.getElementById('tarifDisplay');
-            if(display) {
-                display.innerText = `Tarif: Rp ${res.price.toLocaleString()}/chat`;
-            }
-        } catch (e) {
-            console.error("Gagal memuat tarif:", e);
-        }
-    }
-
-    // UI Helper
+    // --- HELPERS ---
     function openModal(id) { document.getElementById(id).style.display = 'block'; }
     function closeModal(id) { document.getElementById(id).style.display = 'none'; }
     function logout() { localStorage.clear(); window.location.href = '/login.html'; }
 
-    window.onload = loadDashboardData;
+    // PEMANGGILAN UTAMA
+    window.onload = () => {
+        loadDashboardData();
+        showCurrentTarif();
+    };
   </script>
 </body>
 </html>
