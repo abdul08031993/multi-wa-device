@@ -57,6 +57,11 @@
         <div class="balance-label">Total Penghasilan</div>
         <div class="balance-value" id="totalEarned">Rp 0</div>
       </div>
+      <div class="card p-3 mb-3 bg-primary text-white">
+    <h6 class="mb-1">Estimasi Pendapatan</h6>
+    <h4 id="tarifDisplay" class="fw-bold">Tarif: Rp .../chat</h4>
+    <small>*Tarif dapat berubah sewaktu-waktu oleh admin</small>
+</div>
     </div>
 
     <div class="stats-grid">
@@ -240,6 +245,17 @@
             loadDashboardData();
         }
     };
+    async function showCurrentTarif() {
+        try {
+            const res = await fetch('/api/settings/price').then(r => r.json());
+            const display = document.getElementById('tarifDisplay');
+            if(display) {
+                display.innerText = `Tarif: Rp ${res.price.toLocaleString()}/chat`;
+            }
+        } catch (e) {
+            console.error("Gagal memuat tarif:", e);
+        }
+    }
 
     // UI Helper
     function openModal(id) { document.getElementById(id).style.display = 'block'; }
