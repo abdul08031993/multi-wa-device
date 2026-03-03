@@ -1,38 +1,28 @@
-FROM ghcr.io/puppeteer/puppeteer:latest
+# Gunakan image yang sudah dioptimasi untuk puppeteer
+FROM ghcr.io/puppeteer/puppeteer:21.1.1
 
-# Beralih ke root untuk instalasi sistem
 USER root
 
-# Update dan instal library sistem yang sering dibutuhkan WA Web (seperti emoji dan font)
+# Instal dependensi sistem yang minim
 RUN apt-get update && apt-get install -y \
     ffmpeg \
-    fonts-ipafont-gothic \
-    fonts-wqy-zenhei \
-    fonts-thai-tlwg \
-    fonts-kacst \
-    fonts-freefont-ttf \
-    libxss1 \
     --no-install-recommends \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Gunakan cache Docker untuk mempercepat build dengan menyalin package files dulu
+# Pastikan package.json di-copy duluan
 COPY package*.json ./
 
-# Instal dependensi (menggunakan npm ci lebih stabil untuk production)
-RUN npm install
+# Instal dependensi secara bersih (tanpa devDependencies)
+RUN npm install --production && npm cache clean --force
 
-# Salin seluruh kode proyek
+# Copy file project (folder yang ada di .dockerignore otomatis akan diabaikan)
 COPY . .
 
-# Pastikan folder sessions ada dan memiliki izin yang benar
-# Kita berikan kepemilikan ke user 'pptruser' agar lebih aman
+# Buat folder untuk menyimpan sesi agar tidak error permission
 RUN mkdir -p sessions && chown -R pptruser:pptruser /app
 
-# Beralih kembali ke user non-root (pptruser) yang sudah disediakan image dasar
-# Ini penting untuk keamanan dan kompatibilitas Puppeteer
 USER pptruser
 
-# Jalankan aplikasi
 CMD ["node", "index.js"]
