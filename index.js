@@ -5,38 +5,37 @@ const { Server } = require('socket.io');
 const path = require('path');
 const bcrypt = require('bcryptjs');
 
-// 1. IMPORT DATABASE & WA MANAGER
+// IMPORT DATABASE & WA MANAGER
 const db = require('./db'); 
 const { createSession, activeSessions, MessageMedia } = require('./wa-manager');
 
 const app = express();
 const server = http.createServer(app);
 
-// Update: Konfigurasi Socket.io yang lebih kuat untuk lingkungan Cloud/Docker
+// Konfigurasi Socket.io agar stabil di Railway (Cloud)
 const io = new Server(server, {
     cors: {
         origin: "*",
         methods: ["GET", "POST"]
     },
-    transports: ['websocket', 'polling'] // Memastikan koneksi stabil
+    transports: ['websocket', 'polling'],
+    allowEIO3: true // Support untuk client versi lama jika ada
 });
 
-// Middleware
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
-// --- 2. ROUTES VIEW ---
+// --- ROUTES VIEW ---
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'login.html')));
 app.get('/register.html', (req, res) => res.sendFile(path.join(__dirname, 'register.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
-// --- 3. AUTHENTICATION API ---
+// --- AUTHENTICATION API ---
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        // Fix: Menggunakan .returning('*') untuk mendapatkan objek user lengkap di PostgreSQL
         const [newUser] = await db('User').insert({
             username,
             password: hashedPassword,
@@ -65,7 +64,7 @@ app.post('/login', async (req, res) => {
     }
 });
 
-// --- 4. DEVICE MANAGEMENT & SOCKET.IO ---
+// --- DEVICE MANAGEMENT & SOCKET.IO ---
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
@@ -74,7 +73,9 @@ io.on('connection', (socket) => {
         if (!userId || !waNumber) return;
         
         const sessionName = `session_${waNumber}`;
-        console.log(`[SOCKET] Request QR untuk: ${waNumber}`);
+        console.log(`[SOCKET] Request QR untuk: ${waNumber} dari User: ${userId}`);
+        
+        // Memanggil fungsi createSession dari wa-manager.js
         createSession(userId, sessionName, io);
     });
 
@@ -100,10 +101,10 @@ app.post('/api/user/accounts/add', async (req, res) => {
                 createdAt: new Date()
             });
         }
-        res.json({ success: true, message: "Nomor terdaftar. Klik Scan QR sekarang." });
+        res.json({ success: true, message: "Nomor terdaftar. Silakan klik tombol 'Scan QR'." });
     } catch (e) {
         console.error("Add Account Error:", e);
-        res.status(500).json({ error: "Gagal menyimpan ke database." });
+        res.status(500).json({ error: "Gagal menyimpan ke database. Pastikan tabel WaAccount sudah benar." });
     }
 });
 
@@ -126,16 +127,16 @@ app.get('/api/user/my-accounts', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Gagal mengambil data akun." }); }
 });
 
-// --- 5. WITHDRAW & STATS (USER SIDE) ---
-
+// --- WITHDRAW & STATS ---
 app.get('/api/user/my-stats', async (req, res) => {
     const { userId } = req.query;
     if (!userId) return res.status(400).json({ error: "User ID missing" });
 
     try {
-        // Fix: Memberikan nilai fallback agar tidak error 500 jika data kosong
         const user = await db('User').where({ id: userId }).first() || { balance: 0 };
         const totalSent = await db('MessageLog').where({ userId }).count('id as total').first();
+        
+        // Fix table check: Pastikan tabel-tabel ini sudah kamu buat di terminal tadi!
         const pendingWd = await db('Withdraw').where({ userId, status: 'PENDING' }).sum('amount as total').first();
         const totalEarned = await db('MessageLog').where({ userId, status: 'SENT' }).sum('price as total').first();
         const accountsCount = await db('WaAccount').where({ userId }).count('id as total').first();
@@ -155,7 +156,7 @@ app.get('/api/user/my-stats', async (req, res) => {
         });
     } catch (e) { 
         console.error("Stats API Error:", e);
-        res.status(500).json({ error: "Database error saat mengambil statistik." }); 
+        res.status(500).json({ error: "Database error. Cek apakah tabel Withdraw & MessageLog sudah ada." }); 
     }
 });
 
@@ -172,15 +173,21 @@ app.post('/api/user/withdraw', async (req, res) => {
             });
         });
         res.json({ message: "Permintaan WD diproses!" });
-    } catch (e) { res.status(500).json({ error: "Gagal memproses penarikan." }); }
+    } catch (e) { 
+        console.error("WD Error:", e);
+        res.status(500).json({ error: "Gagal memproses penarikan." }); 
+    }
 });
 
-// --- 6. ADMIN API ---
+// --- ADMIN API ---
 app.get('/api/admin/online-sessions', async (req, res) => {
     try {
         let onlineList = [];
         for (let [clientId, client] of activeSessions.entries()) {
-            const [uId, sName] = clientId.split('_');
+            const parts = clientId.split('_');
+            const uId = parts[0];
+            const sName = parts.slice(1).join('_');
+            
             const user = await db('User').where({ id: uId }).first();
             onlineList.push({
                 clientId,
@@ -220,7 +227,7 @@ app.post('/send-message-admin', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// --- RUN SERVER ---
+// RUN SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`\x1b[32m[SERVER]\x1b[0m Berjalan di http://localhost:${PORT}`);
