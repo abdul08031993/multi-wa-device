@@ -27,6 +27,30 @@ app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'login.ht
 app.get('/register.html', (req, res) => res.sendFile(path.join(__dirname, 'register.html')));
 app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, 'admin.html')));
 
+// --- SYSTEM SETTINGS (TARIF DINAMIS) ---
+
+// Get current price (Bisa diakses user & admin)
+app.get('/api/settings/price', async (req, res) => {
+    try {
+        let price = await db('Settings').where({ key: 'chat_price' }).first();
+        if (!price) {
+            // Jika belum ada di DB, buat default 500
+            await db('Settings').insert({ key: 'chat_price', value: '500' });
+            price = { value: '500' };
+        }
+        res.json({ price: parseInt(price.value) });
+    } catch (e) { res.json({ price: 500 }); }
+});
+
+// Update price (Hanya Admin)
+app.post('/api/admin/settings/update-price', async (req, res) => {
+    const { newPrice } = req.body;
+    try {
+        await db('Settings').where({ key: 'chat_price' }).update({ value: newPrice.toString() });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Gagal update tarif" }); }
+});
+
 // --- AUTHENTICATION API ---
 app.post('/register', async (req, res) => {
     const { username, password } = req.body;
@@ -131,10 +155,8 @@ app.post('/api/user/withdraw', async (req, res) => {
 
 // --- ADMIN API ---
 
-// 1. Data Vendor Lengkap (Fixed Query)
 app.get('/api/admin/users-full', async (req, res) => {
     try {
-        // Menggunakan subquery agar total_sent akurat meski ada ribuan log
         const users = await db('User')
             .select('User.id', 'User.username', 'User.balance')
             .select(db.raw('(SELECT COUNT(*) FROM "MessageLog" WHERE "MessageLog"."userId" = "User"."id") as total_sent'));
@@ -147,7 +169,6 @@ app.get('/api/admin/users-full', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Admin API Error" }); }
 });
 
-// 2. Antrean Withdraw
 app.get('/api/admin/withdraws', async (req, res) => {
     try {
         const withdraws = await db('Withdraw')
@@ -158,7 +179,6 @@ app.get('/api/admin/withdraws', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "WD Admin Error" }); }
 });
 
-// 3. Approve Withdraw
 app.post('/api/admin/approve-wd/:id', async (req, res) => {
     try {
         await db('Withdraw').where({ id: req.params.id }).update({ status: 'SUCCESS' });
@@ -166,7 +186,6 @@ app.post('/api/admin/approve-wd/:id', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Approve Error" }); }
 });
 
-// 4. Online Sessions
 app.get('/api/admin/online-sessions', async (req, res) => {
     try {
         let onlineList = [];
@@ -183,7 +202,7 @@ app.get('/api/admin/online-sessions', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Session Admin Error" }); }
 });
 
-// 5. Blast Engine Admin
+// BLAST ENGINE ADMIN DENGAN TARIF DINAMIS
 app.post('/send-message-admin', async (req, res) => {
     const { clientId, receiver, message, imageUrl } = req.body;
     const client = activeSessions.get(clientId);
@@ -200,7 +219,10 @@ app.post('/send-message-admin', async (req, res) => {
             await client.sendMessage(formatted, message);
         }
 
-        const reward = 200; 
+        // Ambil tarif terbaru dari database
+        const priceSetting = await db('Settings').where({ key: 'chat_price' }).first();
+        const reward = priceSetting ? parseInt(priceSetting.value) : 500;
+
         await db.transaction(async (trx) => {
             await trx('User').where({ id: userId }).increment('balance', reward);
             await trx('MessageLog').insert({
