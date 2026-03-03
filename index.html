@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>User Dashboard | WA Vendor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        :root { --primary: #25D366; --dark: #128C7E; }
+        body { background: #f4f7f6; }
+        .stat-card { border-radius: 15px; border: none; transition: 0.3s; }
+        .stat-card:hover { transform: translateY(-5px); }
+        .qr-box { border: 2px dashed #ccc; border-radius: 15px; min-height: 250px; display: flex; align-items: center; justify-content: center; background: white; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark mb-4">
+    <div class="container">
+        <span class="navbar-brand fw-bold"><i class="fab fa-whatsapp text-success"></i> WA VENDOR PANEL</span>
+        <div class="text-white">User: <strong id="userName">...</strong> | <button onclick="logout()" class="btn btn-sm btn-outline-danger">Keluar</button></div>
+    </div>
+</nav>
+
+<div class="container">
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card stat-card p-3 shadow-sm bg-white border-start border-success border-5">
+                <p class="text-muted mb-0">Pendapatan Anda</p>
+                <h3 id="statBalance" class="fw-bold text-success">Rp 0</h3>
+                <button class="btn btn-sm btn-success w-100 mt-2" data-bs-toggle="modal" data-bs-target="#modalWD">Tarik Saldo</button>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card p-3 shadow-sm bg-white border-start border-primary border-5">
+                <p class="text-muted mb-0">Total Pesan Terproses</p>
+                <h3 id="statTotalSent" class="fw-bold">0</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card stat-card p-3 shadow-sm bg-white border-start border-info border-5">
+                <p class="text-muted mb-0">Akun WA Aktif</p>
+                <h3 id="statActiveWA" class="fw-bold">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card p-4 shadow-sm mb-4">
+                <h5 class="fw-bold">Tautkan Akun Baru</h5>
+                <p class="text-muted small">Makin banyak akun, makin besar potensi pendapatan.</p>
+                <input type="text" id="sessionInput" class="form-control mb-3" placeholder="Nama Sesi (Contoh: HP-1)">
+                <button onclick="requestWA()" class="btn btn-primary w-100 fw-bold">Dapatkan QR Code</button>
+                
+                <div class="qr-box mt-4">
+                    <div id="qrcode"></div>
+                    <div id="loader" class="spinner-border text-success" style="display:none"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <div class="card p-4 shadow-sm">
+                <h5 class="fw-bold mb-3">Daftar Akun WA Anda</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nama Sesi</th>
+                                <th>Nomor</th>
+                                <th>Status</th>
+                                <th>Pesan Terkirim</th>
+                            </tr>
+                        </thead>
+                        <tbody id="deviceList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const socket = io();
+    const userId = localStorage.getItem('userId');
+    const userName = localStorage.getItem('username');
+
+    if(!userId) window.location.href = '/login.html';
+    document.getElementById('userName').innerText = userName;
+
+    window.onload = () => { loadStats(); loadDevices(); };
+
+    async function loadStats() {
+        const res = await fetch(`/api/stats/${userId}`).then(r => r.json());
+        document.getElementById('statBalance').innerText = `Rp ${res.balance.toLocaleString()}`;
+        document.getElementById('statTotalSent').innerText = res.total_sent;
+    }
+
+    async function loadDevices() {
+        const res = await fetch(`/api/my-devices/${userId}`).then(r => r.json());
+        const list = document.getElementById('deviceList');
+        let activeCount = 0;
+        list.innerHTML = '';
+        res.forEach(d => {
+            if(d.is_active) activeCount++;
+            list.innerHTML += `
+                <tr>
+                    <td><strong>${d.sessionName}</strong></td>
+                    <td>${d.waNumber || '-'}</td>
+                    <td><span class="badge bg-${d.is_active ? 'success':'danger'}">${d.is_active ? 'Online':'Offline'}</span></td>
+                    <td>${d.total_messages || 0}</td>
+                </tr>`;
+        });
+        document.getElementById('statActiveWA').innerText = activeCount;
+    }
+
+    function requestWA() {
+        const sessionName = document.getElementById('sessionInput').value;
+        if(!sessionName) return alert("Isi nama sesi!");
+        document.getElementById('loader').style.display = "block";
+        document.getElementById('qrcode').innerHTML = "";
+        fetch('/add-device', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ userId, sessionName })
+        });
+    }
+
+    socket.on('qr', (data) => {
+        const currentSession = document.getElementById('sessionInput').value;
+        if (data.clientId === `${userId}_${currentSession}`) {
+            document.getElementById('loader').style.display = "none";
+            document.getElementById('qrcode').innerHTML = "";
+            new QRCode(document.getElementById('qrcode'), { text: data.qr, width: 200, height: 200 });
+        }
+    });
+
+    socket.on('ready', () => { alert("WA Berhasil Ditautkan!"); location.reload(); });
+    function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+</script>
+</body>
+</html>

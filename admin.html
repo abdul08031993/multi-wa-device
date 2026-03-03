@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin | WA Gateway Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root { --primary-red: #dc3545; --dark-bg: #f4f7f6; }
+        body { background-color: var(--dark-bg); font-family: 'Inter', sans-serif; }
+        .nav-pills .nav-link.active { background-color: var(--primary-red); shadow: 0 4px 10px rgba(220, 53, 69, 0.3); }
+        .nav-link { color: #555; fw: 600; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); }
+        .log-window { height: 120px; overflow-y: scroll; background: #1a1a1a; color: #25D366; font-family: 'Courier New', monospace; font-size: 11px; padding: 10px; border-radius: 8px; }
+        .device-card { border-left: 5px solid #ccc; transition: 0.3s; }
+        .device-card.online { border-left-color: #25D366; }
+        .status-badge { font-size: 0.7rem; padding: 4px 8px; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark bg-dark shadow-sm mb-4">
+    <div class="container-fluid">
+        <span class="navbar-brand fw-bold text-danger"><i class="fas fa-user-shield me-2"></i> MASTER ADMIN PANEL</span>
+        <div class="d-flex">
+            <button onclick="location.reload()" class="btn btn-outline-light btn-sm me-2"><i class="fas fa-sync"></i> Refresh Data</button>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4">
+    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm" id="adminTabs" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-blast"><i class="fas fa-rocket me-2"></i>Parallel Blast</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-vendors" onclick="loadVendorData()"><i class="fas fa-users me-2"></i>Data Vendor (User)</button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link position-relative" data-bs-toggle="pill" data-bs-target="#tab-withdraw" onclick="loadWithdrawData()">
+                <i class="fas fa-wallet me-2"></i>Request Withdraw
+                <span id="wdBadge" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" style="display:none">0</span>
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-blast">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="card p-4 mb-4">
+                        <h6 class="fw-bold mb-3">Konfigurasi Global</h6>
+                        <div class="mb-3">
+                            <label class="small fw-bold">URL Gambar (Opsional)</label>
+                            <input type="text" id="imgUrl" class="form-control" placeholder="https://link-gambar.jpg">
+                        </div>
+                        <div class="mb-3">
+                            <label class="small fw-bold">Isi Pesan / Caption</label>
+                            <textarea id="msgGlobal" class="form-control" rows="5" placeholder="Tulis pesan promosi di sini..."></textarea>
+                        </div>
+                        <button onclick="startAllBlasts()" id="btnRunAll" class="btn btn-danger w-100 fw-bold py-2"><i class="fas fa-play me-2"></i> JALANKAN SEMUA SLOT</button>
+                    </div>
+
+                    <div class="card p-3">
+                        <h6 class="fw-bold">Status Perangkat</h6>
+                        <div id="onlineDevicesList" class="mt-2">
+                            </div>
+                    </div>
+                </div>
+
+                <div class="col-md-8">
+                    <div id="blastSlots" class="row">
+                        </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-vendors">
+            <div class="card p-4 shadow-sm">
+                <h5 class="fw-bold mb-4">Monitoring Vendor (User)</h5>
+                <div class="table-responsive">
+                    <table class="table align-middle table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Username</th>
+                                <th>Total Blast Berhasil</th>
+                                <th>Saldo Saat Ini</th>
+                                <th>Status Akun</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendorTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="tab-withdraw">
+            <div class="card p-4 shadow-sm border-start border-danger border-5">
+                <h5 class="fw-bold mb-4 text-danger">Antrean Penarikan Saldo</h5>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead>
+                            <tr>
+                                <th>User</th>
+                                <th>Jumlah WD</th>
+                                <th>Detail Bank / E-Wallet</th>
+                                <th>Tanggal</th>
+                                <th>Status</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="withdrawTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // FUNGSI LOAD ONLINE DEVICES (Untuk Blast)
+    async function loadOnlineSessions() {
+        const res = await fetch('/api/admin/online-sessions').then(r => r.json());
+        const list = document.getElementById('onlineDevicesList');
+        const slots = document.getElementById('blastSlots');
+        list.innerHTML = ''; slots.innerHTML = '';
+
+        res.forEach((s, index) => {
+            list.innerHTML += `
+                <div class="card p-2 mb-2 device-card online">
+                    <div class="d-flex justify-content-between">
+                        <small class="fw-bold">${s.username}</small>
+                        <span class="badge bg-success status-badge">ONLINE</span>
+                    </div>
+                    <div class="small text-muted">${s.waNumber}</div>
+                </div>`;
+
+            slots.innerHTML += `
+                <div class="col-md-6 mb-3">
+                    <div class="card p-3 border-danger shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 fw-bold text-danger"><i class="fab fa-whatsapp"></i> Slot ${index+1}: ${s.username}</h6>
+                            <span class="badge bg-secondary" id="badge-${s.clientId}">Idle</span>
+                        </div>
+                        <textarea id="list-${s.clientId}" class="form-control mb-2" rows="3" placeholder="Nomor per baris (628...)"></textarea>
+                        <div class="progress mb-2" style="height: 6px;">
+                            <div id="prog-${s.clientId}" class="progress-bar bg-danger" style="width: 0%"></div>
+                        </div>
+                        <div id="log-${s.clientId}" class="log-window">Menunggu perintah...</div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    // FUNGSI LOAD DATA VENDOR (USER)
+    async function loadVendorData() {
+        const res = await fetch('/api/admin/users-full').then(r => r.json());
+        const tbody = document.getElementById('vendorTableBody');
+        tbody.innerHTML = res.map(u => `
+            <tr>
+                <td><strong>${u.username}</strong></td>
+                <td><span class="badge bg-primary">${u.total_sent} Pesan</span></td>
+                <td><strong class="text-success">Rp ${u.balance.toLocaleString()}</strong></td>
+                <td><span class="badge bg-success">Aktif</span></td>
+            </tr>
+        `).join('');
+    }
+
+    // FUNGSI LOAD REQUEST WITHDRAW
+    async function loadWithdrawData() {
+        const res = await fetch('/api/admin/withdraws').then(r => r.json());
+        const tbody = document.getElementById('withdrawTableBody');
+        const pending = res.filter(w => w.status === 'PENDING').length;
+        
+        if(pending > 0) {
+            document.getElementById('wdBadge').style.display = "inline";
+            document.getElementById('wdBadge').innerText = pending;
+        } else {
+            document.getElementById('wdBadge').style.display = "none";
+        }
+
+        tbody.innerHTML = res.map(w => `
+            <tr class="${w.status === 'PENDING' ? 'table-warning' : ''}">
+                <td><strong>${w.username}</strong></td>
+                <td><h6 class="mb-0">Rp ${w.amount.toLocaleString()}</h6></td>
+                <td><small class="text-muted">${w.bankInfo}</small></td>
+                <td>${new Date(w.createdAt).toLocaleDateString()}</td>
+                <td><span class="badge bg-${w.status === 'PENDING' ? 'warning' : 'success'}">${w.status}</span></td>
+                <td>
+                    ${w.status === 'PENDING' ? 
+                    `<button onclick="approveWD(${w.id})" class="btn btn-sm btn-success fw-bold">PROSES CAIR</button>` : 
+                    `<i class="fas fa-check-circle text-success"></i> Selesai`}
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function approveWD(id) {
+        if(!confirm("Pastikan Anda sudah transfer ke rekening user! Tandai sebagai sukses?")) return;
+        await fetch(`/api/admin/approve-wd/${id}`, { method: 'POST' });
+        loadWithdrawData();
+    }
+
+    const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    async function startAllBlasts() {
+        const sessions = await fetch('/api/admin/online-sessions').then(r => r.json());
+        const globalMsg = document.getElementById('msgGlobal').value;
+        const globalImg = document.getElementById('imgUrl').value;
+        document.getElementById('btnRunAll').disabled = true;
+
+        const tasks = sessions.map(async (s) => {
+            const lines = document.getElementById(`list-${s.clientId}`).value.split('\n').filter(n => n.trim() !== "");
+            if(lines.length === 0) return;
+
+            const logBox = document.getElementById(`log-${s.clientId}`);
+            const badge = document.getElementById(`badge-${s.clientId}`);
+            const prog = document.getElementById(`prog-${s.clientId}`);
+
+            badge.innerText = "RUNNING"; badge.className = "badge bg-danger";
+            logBox.innerHTML = "";
+
+            for(let i = 0; i < lines.length; i++) {
+                const num = lines[i].trim();
+                logBox.innerHTML += `> Sending ${num}... `;
+                try {
+                    const res = await fetch('/send-message-admin', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ clientId: s.clientId, receiver: num, message: globalMsg, imageUrl: globalImg })
+                    }).then(r => r.json());
+
+                    if(res.success) logBox.innerHTML += `<span style="color:lime">SUCCESS</span>\n`;
+                    else logBox.innerHTML += `<span style="color:red">FAILED</span>\n`;
+                } catch (e) { logBox.innerHTML += `<span style="color:red">ERROR</span>\n`; }
+                
+                prog.style.width = Math.round(((i + 1) / lines.length) * 100) + "%";
+                logBox.scrollTop = logBox.scrollHeight;
+                await sleep(4000); // Delay 4 detik
+            }
+            badge.innerText = "FINISHED"; badge.className = "badge bg-success";
+        });
+
+        await Promise.all(tasks);
+        alert("Seluruh proses blast selesai!");
+        document.getElementById('btnRunAll').disabled = false;
+    }
+
+    window.onload = loadOnlineSessions;
+</script>
+</body>
+</html>
