@@ -3,128 +3,140 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Master Admin | WA Gateway</title>
+    <title>Master Admin | WA Gateway PRO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary-red: #dc3545; --dark-bg: #f8f9fa; }
-        body { background-color: var(--dark-bg); font-family: 'Segoe UI', sans-serif; }
-        .card { border: none; border-radius: 15px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        :root { --primary-red: #dc3545; --dark-bg: #f4f7f6; }
+        body { background-color: var(--dark-bg); font-family: 'Inter', 'Segoe UI', sans-serif; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 20px; }
         .nav-pills .nav-link.active { background-color: var(--primary-red); }
-        .log-window { height: 150px; overflow-y: auto; background: #212529; color: #00ff00; font-family: 'Consolas', monospace; font-size: 12px; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
-        #licenseOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 9999; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
-        .license-box { background: white; padding: 30px; border-radius: 15px; text-align: center; max-width: 400px; width: 90%; }
-        .preview-img { max-height: 100px; border-radius: 8px; margin-top: 10px; display: none; }
+        .log-window { height: 160px; overflow-y: auto; background: #1e1e1e; color: #00ff41; font-family: 'Consolas', monospace; font-size: 11px; padding: 10px; border-radius: 8px; border: 1px solid #333; }
+        #licenseOverlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.95); z-index: 10000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px); }
+        .license-box { background: white; padding: 40px; border-radius: 20px; text-align: center; max-width: 400px; width: 90%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .preview-img { max-height: 120px; border-radius: 8px; margin-top: 10px; display: none; border: 2px solid #ddd; }
+        .gudang-header { background: #212529; color: white; border-radius: 12px 12px 0 0; padding: 10px 15px; }
+        .sticky-config { position: sticky; top: 20px; }
     </style>
 </head>
 <body>
 
 <div id="licenseOverlay">
     <div class="license-box">
-        <h3>🔐 Admin Authentication</h3>
-        <p class="text-muted">Masukkan kode lisensi untuk mengakses panel ini.</p>
-        <input type="password" id="inputLicense" class="form-control mb-3" placeholder="Ketik Kode Lisensi...">
-        <button class="btn btn-primary w-100" onclick="verifyLicense()">Buka Akses</button>
-        <div id="errorMessage" class="text-danger mt-2 small" style="display:none;">Lisensi Salah!</div>
+        <i class="fas fa-user-shield fa-3x text-danger mb-3"></i>
+        <h4 class="fw-bold">Master Authentication</h4>
+        <p class="text-muted small">Panel ini dikunci. Masukkan lisensi admin.</p>
+        <input type="password" id="inputLicense" class="form-control mb-3 text-center" placeholder="••••••••••••">
+        <button class="btn btn-danger w-100 fw-bold" onclick="verifyLicense()">BUKA AKSES</button>
+        <div id="errorMessage" class="text-danger mt-2 small" style="display:none;">Lisensi salah atau tidak aktif!</div>
     </div>
 </div>
 
-<nav class="navbar navbar-dark bg-dark mb-4">
-    <div class="container-fluid">
-        <span class="navbar-brand fw-bold text-danger"><i class="fas fa-shield-alt me-2"></i> MASTER ADMIN PANEL</span>
+<nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold text-danger" href="#"><i class="fas fa-fire me-2"></i>GATEWAY ADMIN</a>
         <div class="d-flex gap-2">
-            <button onclick="exportToCSV()" class="btn btn-info btn-sm text-white"><i class="fas fa-file-export"></i> Export Log CSV</button>
-            <button onclick="loadOnlineSessions()" class="btn btn-outline-light btn-sm"><i class="fas fa-sync"></i> Refresh Sesi</button>
+            <button onclick="exportToCSV()" class="btn btn-outline-info btn-sm"><i class="fas fa-file-csv"></i> Log Terkirim</button>
+            <button onclick="loadOnlineSessions()" class="btn btn-outline-light btn-sm"><i class="fas fa-sync-alt"></i> Refresh Sesi</button>
         </div>
     </div>
 </nav>
 
-<div class="container-fluid px-4">
-    <ul class="nav nav-pills mb-4 bg-white p-2 rounded-3 shadow-sm" id="adminTabs">
-        <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#tab-blast"><i class="fas fa-paper-plane me-2"></i>Multi-Account Blast</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-vendors" onclick="loadVendorData()"><i class="fas fa-users me-2"></i>Semua User</button></li>
-        <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#tab-withdraw" onclick="loadWithdrawData()"><i class="fas fa-wallet me-2"></i>Tarik Saldo <span id="wdBadge" class="badge bg-danger ms-1" style="display:none">0</span></button></li>
-    </ul>
-
-    <div class="tab-content">
-        <div class="tab-pane fade show active" id="tab-blast">
-            <div class="row">
-                <div class="col-lg-4">
-                    <div class="card p-4">
-                        <h6 class="fw-bold mb-3"><i class="fas fa-cog me-2"></i>Global Config</h6>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Tarif per Chat (Rp)</label>
-                            <div class="input-group">
-                                <input type="number" id="priceInput" class="form-control" placeholder="500">
-                                <button class="btn btn-danger" onclick="updatePrice()">Update</button>
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Pesan / Caption</label>
-                            <textarea id="msgGlobal" class="form-control" rows="4" placeholder="Halo, ini pesan..."></textarea>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Upload Gambar Blast</label>
-                            <input type="file" id="fileInput" class="form-control" accept="image/*" onchange="uploadImage(this)">
-                            <input type="hidden" id="imgUrl">
-                            <div id="uploadStatus" class="small mt-1"></div>
-                            <img id="imgPreview" class="preview-img">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label small fw-bold">Delay per Pesan (Detik)</label>
-                            <input type="number" id="delayInput" class="form-control" value="5" min="1">
-                        </div>
-                        <button onclick="startAllBlasts()" id="btnRunAll" class="btn btn-danger w-100 fw-bold py-2 mt-2">
-                            <i class="fas fa-play-circle me-2"></i> JALANKAN SEMUA SLOT
-                        </button>
+<div class="container-fluid p-4">
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="sticky-config">
+                <div class="card shadow-sm border-0 mb-3">
+                    <div class="gudang-header d-flex justify-content-between align-items-center">
+                        <span class="small fw-bold"><i class="fas fa-database me-1"></i> GUDANG NOMOR UTAMA</span>
+                        <span id="dbCount" class="badge bg-danger">0 Nomor</span>
+                    </div>
+                    <div class="card-body p-2">
+                        <textarea id="mainDatabase" class="form-control border-0" rows="8" style="font-size: 13px; background: #f8f9fa;" placeholder="62812xxx&#10;62857xxx" oninput="updateDbCount()"></textarea>
+                        <button class="btn btn-link btn-sm text-decoration-none w-100 text-muted" onclick="cleanDuplicates()"><i class="fas fa-magic"></i> Bersihkan Duplikat & Karakter</button>
                     </div>
                 </div>
 
-                <div class="col-lg-8">
+                <div class="card p-3 shadow-sm">
+                    <h6 class="fw-bold border-bottom pb-2 mb-3">Global Config</h6>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Tarif Reward User (Rp)</label>
+                        <div class="input-group input-group-sm">
+                            <input type="number" id="priceInput" class="form-control" value="500">
+                            <button class="btn btn-dark" onclick="updatePrice()">Save</button>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Pesan Blast</label>
+                        <textarea id="msgGlobal" class="form-control" rows="4" placeholder="Halo kak..."></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Gambar (Opsional)</label>
+                        <input type="file" id="fileInput" class="form-control form-control-sm" accept="image/*" onchange="processImage(this)">
+                        <input type="hidden" id="imgUrl">
+                        <div id="uploadStatus" class="small mt-1 text-muted"></div>
+                        <img id="imgPreview" class="preview-img img-fluid">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">Jeda / Delay (Detik)</label>
+                        <input type="number" id="delayInput" class="form-control form-control-sm" value="5">
+                    </div>
+                    <button id="btnRunAll" onclick="startAllBlasts()" class="btn btn-danger w-100 fw-bold shadow-sm">
+                        <i class="fas fa-rocket me-2"></i> JALANKAN SEMUA AKUN
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-8">
+            <ul class="nav nav-pills mb-3 bg-white p-2 rounded-3 shadow-sm" id="pills-tab">
+                <li class="nav-item"><button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-blast"><i class="fas fa-tasks me-2"></i>Blast Slots</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-users" onclick="loadVendorData()"><i class="fas fa-users-cog me-2"></i>User Manager</button></li>
+                <li class="nav-item"><button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-wd" onclick="loadWithdrawData()"><i class="fas fa-cash-register me-2"></i>Payouts <span id="wdBadge" class="badge bg-danger ms-1" style="display:none">0</span></button></li>
+            </ul>
+
+            <div class="tab-content">
+                <div class="tab-pane fade show active" id="pills-blast">
                     <div id="blastSlots" class="row">
-                        <div class="col-12 text-center py-5 text-muted">Memuat akun yang sedang online...</div>
+                        <div class="col-12 text-center py-5 text-muted">Memuat akun online...</div>
                     </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="tab-pane fade" id="tab-vendors">
-            <div class="card p-4">
-                <h5 class="fw-bold mb-3">Manajemen Semua User</h5>
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle">
-                        <thead class="table-light">
-                            <tr><th>ID</th><th>Username</th><th>Total Pesan</th><th>Saldo</th><th>Status Akun</th></tr>
-                        </thead>
-                        <tbody id="vendorTableBody"></tbody>
-                    </table>
+                <div class="tab-pane fade" id="pills-users">
+                    <div class="card p-3">
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead class="table-light"><tr><th>ID</th><th>Username</th><th>Total Chat</th><th>Saldo</th></tr></thead>
+                                <tbody id="vendorTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
 
-        <div class="tab-pane fade" id="tab-withdraw">
-            <div class="card p-4">
-                <h5 class="fw-bold mb-3">Daftar Pengajuan Penarikan</h5>
-                <div class="table-responsive">
-                    <table class="table align-middle">
-                        <thead>
-                            <tr><th>User</th><th>Jumlah</th><th>Rekening</th><th>Tanggal</th><th>Status</th><th>Aksi</th></tr>
-                        </thead>
-                        <tbody id="withdrawTableBody"></tbody>
-                    </table>
+                <div class="tab-pane fade" id="pills-wd">
+                    <div class="card p-3">
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead><tr><th>User</th><th>Amount</th><th>Method</th><th>Status</th><th>Action</th></tr></thead>
+                                <tbody id="withdrawTableBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
     let savedLicense = localStorage.getItem('admin_master_key');
 
-    // --- LICENSE LOGIC ---
-    if (savedLicense) { document.getElementById('licenseOverlay').style.display = 'none'; }
+    // --- AUTH ---
+    if (savedLicense) document.getElementById('licenseOverlay').style.display = 'none';
 
     async function verifyLicense() {
         const input = document.getElementById('inputLicense').value;
@@ -137,66 +149,84 @@
         }
     }
 
-    // --- IMAGE UPLOAD (Using ImgBB - FREE API) ---
-    async function uploadImage(input) {
-        const file = input.files[0];
-        if (!file) return;
+    // --- GUDANG LOGIC ---
+    function updateDbCount() {
+        const lines = document.getElementById('mainDatabase').value.split('\n').filter(n => n.trim() !== "");
+        document.getElementById('dbCount').innerText = `${lines.length} Nomor`;
+    }
 
+    function cleanDuplicates() {
+        const db = document.getElementById('mainDatabase');
+        let numbers = db.value.split('\n').map(n => n.replace(/\D/g, '')).filter(n => n.length > 5);
+        let unique = [...new Set(numbers)];
+        db.value = unique.join('\n');
+        updateDbCount();
+        alert("Data dibersihkan!");
+    }
+
+    function takeNumbers(clientId) {
+        const mainDb = document.getElementById('mainDatabase');
+        const targetArea = document.getElementById(`list-${clientId}`);
+        const amount = parseInt(document.getElementById(`take-${clientId}`).value) || 0;
+
+        let numbers = mainDb.value.split('\n').filter(n => n.trim() !== "");
+        if (numbers.length === 0) return alert("Gudang kosong!");
+        
+        const taken = numbers.splice(0, amount);
+        mainDb.value = numbers.join('\n');
+        updateDbCount();
+
+        const current = targetArea.value.trim();
+        targetArea.value = (current ? current + '\n' : '') + taken.join('\n');
+    }
+
+    // --- IMAGE PROCESS (BASE64) ---
+    function processImage(input) {
+        const file = input.files[0];
         const status = document.getElementById('uploadStatus');
         const preview = document.getElementById('imgPreview');
-        status.innerHTML = "⏳ Mengunggah gambar...";
-        
-        const formData = new FormData();
-        formData.append("image", file);
-
-        try {
-            // Menggunakan API ImgBB (Tanpa API Key untuk testing, atau gunakan milikmu)
-            const res = await fetch("https://api.imgbb.com/1/upload?key=YOUR_IMGBB_API_KEY", {
-                method: "POST",
-                body: formData
-            }).then(r => r.json());
-
-            if (res.success) {
-                document.getElementById('imgUrl').value = res.data.url;
-                preview.src = res.data.url;
-                preview.style.display = "block";
-                status.innerHTML = "<span class='text-success'>✅ Berhasil diunggah!</span>";
-            } else {
-                status.innerHTML = "<span class='text-danger'>❌ Gagal unggah.</span>";
-            }
-        } catch (e) { status.innerHTML = "❌ Error koneksi."; }
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('imgUrl').value = e.target.result;
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                status.innerHTML = "✅ Gambar dimuat";
+            };
+            reader.readAsDataURL(file);
+        }
     }
 
-    // --- BLAST LOGIC ---
+    // --- BLAST ENGINE ---
     async function startAllBlasts() {
         const sessions = await fetch(`/api/admin/online-sessions?license=${savedLicense}`).then(r => r.json());
-        const globalMsg = document.getElementById('msgGlobal').value;
-        const globalImg = document.getElementById('imgUrl').value;
+        const msg = document.getElementById('msgGlobal').value;
+        const img = document.getElementById('imgUrl').value;
         const delay = parseInt(document.getElementById('delayInput').value) || 5;
 
-        if(!globalMsg) return alert("Pesan tidak boleh kosong!");
+        if(!msg) return alert("Isi pesan dulu!");
         document.getElementById('btnRunAll').disabled = true;
 
-        for (const s of sessions) {
-            const lines = document.getElementById(`list-${s.clientId}`).value.split('\n').filter(n => n.trim() !== "");
-            if(lines.length === 0) continue;
-
-            runBlastSingleSlot(s, lines, globalMsg, globalImg, delay);
-        }
-        alert("Blast berjalan di semua slot!");
+        sessions.forEach(s => {
+            const listArea = document.getElementById(`list-${s.clientId}`);
+            if (listArea && listArea.value.trim() !== "") {
+                const numbers = listArea.value.split('\n').filter(n => n.trim() !== "");
+                runAccountBlast(s, numbers, msg, img, delay);
+            }
+        });
     }
 
-    async function runBlastSingleSlot(session, numbers, msg, img, delay) {
+    async function runAccountBlast(session, numbers, msg, img, delay) {
         const logBox = document.getElementById(`log-${session.clientId}`);
         const badge = document.getElementById(`badge-${session.clientId}`);
         const prog = document.getElementById(`prog-${session.clientId}`);
         
         badge.innerText = "RUNNING"; badge.className = "badge bg-danger";
-        logBox.innerHTML = "";
+        logBox.innerHTML = `[SYSTEM] Memulai blast ${numbers.length} nomor...\n`;
 
         for(let i = 0; i < numbers.length; i++) {
             const num = numbers[i].trim();
-            logBox.innerHTML += `[${new Date().toLocaleTimeString()}] Ke ${num}... `;
+            logBox.innerHTML += `> Ke ${num}: `;
             
             try {
                 const res = await fetch('/send-message-admin', {
@@ -204,38 +234,41 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ 
                         clientId: session.clientId, 
-                        receiver: num, 
-                        message: msg, 
-                        imageUrl: img,
+                        receiver: num, message: msg, imageUrl: img,
                         license: savedLicense
                     })
                 }).then(r => r.json());
 
-                logBox.innerHTML += res.success ? `<span class="text-success">OK</span>\n` : `<span class="text-warning">FAIL</span>\n`;
-            } catch (e) { logBox.innerHTML += `<span class="text-danger">ERR</span>\n`; }
+                if(res.success) logBox.innerHTML += `<span style="color:#00ff41">SENT</span>\n`;
+                else logBox.innerHTML += `<span style="color:yellow">FAIL (${res.error})</span>\n`;
+            } catch (e) { logBox.innerHTML += `<span style="color:red">ERROR</span>\n`; }
 
             prog.style.width = Math.round(((i + 1) / numbers.length) * 100) + "%";
             logBox.scrollTop = logBox.scrollHeight;
             if (i < numbers.length - 1) await sleep(delay * 1000);
         }
-        badge.innerText = "FINISH"; badge.className = "badge bg-success";
+        badge.innerText = "FINISHED"; badge.className = "badge bg-success";
     }
 
-    // --- DATA MANAGEMENT ---
+    // --- DATA LOADING ---
     async function loadOnlineSessions() {
         const res = await fetch(`/api/admin/online-sessions?license=${savedLicense}`).then(r => r.json());
         const slots = document.getElementById('blastSlots');
-        slots.innerHTML = res.length === 0 ? '<div class="col-12 text-center py-5">⚠️ No sessions online</div>' : '';
+        slots.innerHTML = '';
         res.forEach(s => {
             slots.innerHTML += `
                 <div class="col-md-6 mb-3">
-                    <div class="card p-3 border-start border-danger border-4">
-                        <div class="d-flex justify-content-between align-items-center mb-2">
-                            <strong>${s.username} (${s.waNumber})</strong>
+                    <div class="card p-3 border-0 shadow-sm">
+                        <div class="d-flex justify-content-between mb-2">
+                            <small class="fw-bold"><i class="fab fa-whatsapp text-success"></i> ${s.username}</small>
                             <span class="badge bg-secondary" id="badge-${s.clientId}">IDLE</span>
                         </div>
-                        <textarea id="list-${s.clientId}" class="form-control mb-2" rows="3" placeholder="6281xxx (satu per baris)"></textarea>
-                        <div class="progress mb-2"><div id="prog-${s.clientId}" class="progress-bar bg-danger"></div></div>
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="number" id="take-${s.clientId}" class="form-control" value="20">
+                            <button class="btn btn-outline-danger" onclick="takeNumbers('${s.clientId}')">Tarik Nomor</button>
+                        </div>
+                        <textarea id="list-${s.clientId}" class="form-control mb-2" rows="3" style="font-size:11px" placeholder="Antrean nomor..."></textarea>
+                        <div class="progress mb-2" style="height:5px"><div id="prog-${s.clientId}" class="progress-bar bg-danger"></div></div>
                         <div id="log-${s.clientId}" class="log-window"></div>
                     </div>
                 </div>`;
@@ -245,26 +278,40 @@
     async function loadVendorData() {
         const res = await fetch(`/api/admin/users-full?license=${savedLicense}`).then(r => r.json());
         document.getElementById('vendorTableBody').innerHTML = res.map(u => `
-            <tr><td>${u.id}</td><td>${u.username}</td><td>${u.total_sent}</td><td>Rp ${u.balance.toLocaleString()}</td><td>Active</td></tr>
+            <tr><td>${u.id}</td><td><b>${u.username}</b></td><td>${u.total_sent}</td><td class="text-success">Rp ${u.balance.toLocaleString()}</td></tr>
         `).join('');
     }
 
     async function loadWithdrawData() {
         const res = await fetch(`/api/admin/withdraws?license=${savedLicense}`).then(r => r.json());
+        const pending = res.filter(w => w.status === 'PENDING').length;
+        document.getElementById('wdBadge').style.display = pending > 0 ? 'inline' : 'none';
+        document.getElementById('wdBadge').innerText = pending;
         document.getElementById('withdrawTableBody').innerHTML = res.map(w => `
-            <tr><td>${w.username}</td><td>Rp ${w.amount.toLocaleString()}</td><td>${w.bankInfo}</td><td>${new Date(w.createdAt).toLocaleDateString()}</td><td>${w.status}</td>
-            <td>${w.status === 'PENDING' ? `<button onclick="approveWD(${w.id})" class="btn btn-sm btn-success">Selesaikan</button>` : '✅'}</td></tr>
+            <tr><td>${w.username}</td><td>Rp ${w.amount.toLocaleString()}</td><td><small>${w.bankInfo}</small></td>
+            <td><span class="badge bg-${w.status === 'PENDING' ? 'warning' : 'success'}">${w.status}</span></td>
+            <td>${w.status === 'PENDING' ? `<button onclick="approveWD(${w.id})" class="btn btn-xs btn-success py-0 px-2">Approve</button>` : '✅'}</td></tr>
         `).join('');
+    }
+
+    async function approveWD(id) {
+        if(!confirm("Proses WD ini?")) return;
+        await fetch(`/api/admin/approve-wd/${id}`, { 
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ license: savedLicense }) 
+        });
+        loadWithdrawData();
     }
 
     async function updatePrice() {
         const newPrice = document.getElementById('priceInput').value;
-        const res = await fetch('/api/admin/settings/update-price', {
+        await fetch('/api/admin/settings/update-price', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ newPrice, license: savedLicense })
-        }).then(r => r.json());
-        if(res.success) alert("Tarif diperbarui!");
+        });
+        alert("Tarif diupdate!");
     }
 
     async function exportToCSV() {
@@ -273,15 +320,12 @@
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = 'log_blast.csv';
-        a.click();
+        a.href = url; a.download = `Log_Blast_${new Date().getTime()}.csv`; a.click();
     }
 
     window.onload = () => {
         if(savedLicense) {
             loadOnlineSessions();
-            loadVendorData();
             fetch('/api/settings/price').then(r => r.json()).then(d => document.getElementById('priceInput').value = d.price);
         }
     };
