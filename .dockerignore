@@ -1,0 +1,14 @@
+# Abaikan folder sesi dan cache WhatsApp
+.wwebjs_auth
+.wwebjs_cache
+sessions
+node_modules
+
+# Abaikan file sistem dan env
+.env
+.git
+.DS_Store
+
+# Abaikan file build
+Dockerfile
+.gitignore
