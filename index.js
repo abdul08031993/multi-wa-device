@@ -11,7 +11,15 @@ const { createSession, activeSessions, MessageMedia } = require('./wa-manager');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+// Update: Konfigurasi Socket.io yang lebih kuat untuk lingkungan Cloud/Docker
+const io = new Server(server, {
+    cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+    },
+    transports: ['websocket', 'polling'] // Memastikan koneksi stabil
+});
 
 // Middleware
 app.use(express.json());
@@ -28,14 +36,17 @@ app.post('/register', async (req, res) => {
     const { username, password } = req.body;
     try {
         const hashedPassword = await bcrypt.hash(password, 10);
-        const [userId] = await db('User').insert({
+        // Fix: Menggunakan .returning('*') untuk mendapatkan objek user lengkap di PostgreSQL
+        const [newUser] = await db('User').insert({
             username,
             password: hashedPassword,
             balance: 0 
-        }).returning('id'); // Menambahkan returning untuk PostgreSQL
-        res.json({ userId, username, balance: 0 });
+        }).returning(['id', 'username', 'balance']);
+        
+        res.json({ userId: newUser.id, username: newUser.username, balance: newUser.balance });
     } catch (e) {
-        res.status(400).json({ error: "Username sudah digunakan!" });
+        console.error("Register Error:", e);
+        res.status(400).json({ error: "Username sudah digunakan atau masalah database!" });
     }
 });
 
@@ -44,13 +55,13 @@ app.post('/login', async (req, res) => {
     try {
         const user = await db('User').where({ username }).first();
         if (user && await bcrypt.compare(password, user.password)) {
-            // Mengirim data yang dibutuhkan dashboard (id, username, balance)
             res.json({ id: user.id, username: user.username, balance: user.balance });
         } else {
-            res.status(401).json({ error: "Login gagal! Periksa username/password." });
+            res.status(401).json({ error: "Username atau password salah!" });
         }
     } catch (e) {
-        res.status(500).json({ error: "Server Error" });
+        console.error("Login Error:", e);
+        res.status(500).json({ error: "Internal Server Error" });
     }
 });
 
@@ -58,40 +69,48 @@ app.post('/login', async (req, res) => {
 io.on('connection', (socket) => {
     console.log('User connected to socket:', socket.id);
 
-    // Event saat user minta QR Code dari Dashboard
-    socket.on('request_qr', async (data) => {
+    socket.on('request_qr', (data) => {
         const { userId, waNumber } = data;
+        if (!userId || !waNumber) return;
+        
         const sessionName = `session_${waNumber}`;
-        console.log(`Mencoba membuat sesi untuk: ${waNumber}`);
+        console.log(`[SOCKET] Request QR untuk: ${waNumber}`);
         createSession(userId, sessionName, io);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected from socket');
     });
 });
 
-// Endpoint Tambah Akun (Sesuai Dashboard Baru)
 app.post('/api/user/accounts/add', async (req, res) => {
     const { userId, waNumber } = req.body;
+    if (!userId || !waNumber) return res.status(400).json({ error: "Data tidak lengkap!" });
+
     try {
         const sessionName = `session_${waNumber}`;
-        // Simpan ke database jika belum ada
         const existing = await db('WaAccount').where({ userId, waNumber }).first();
+        
         if (!existing) {
             await db('WaAccount').insert({
-                userId,
+                userId: parseInt(userId),
                 waNumber,
                 sessionName,
                 status: 'DISCONNECTED',
                 createdAt: new Date()
             });
         }
-        res.json({ message: "Nomor berhasil didaftarkan. Silakan klik Scan QR." });
+        res.json({ success: true, message: "Nomor terdaftar. Klik Scan QR sekarang." });
     } catch (e) {
-        res.status(500).json({ error: e.message });
+        console.error("Add Account Error:", e);
+        res.status(500).json({ error: "Gagal menyimpan ke database." });
     }
 });
 
-// Get My Accounts (Sesuai Dashboard Baru)
 app.get('/api/user/my-accounts', async (req, res) => {
     const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "User ID missing" });
+
     try {
         const devices = await db('WaAccount').where({ userId });
         const updatedDevices = devices.map(dev => {
@@ -104,36 +123,40 @@ app.get('/api/user/my-accounts', async (req, res) => {
             };
         });
         res.json(updatedDevices);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: "Gagal mengambil data akun." }); }
 });
 
 // --- 5. WITHDRAW & STATS (USER SIDE) ---
 
-// Get Stats (Sesuai Dashboard Baru)
 app.get('/api/user/my-stats', async (req, res) => {
     const { userId } = req.query;
+    if (!userId) return res.status(400).json({ error: "User ID missing" });
+
     try {
-        const user = await db('User').where({ id: userId }).first();
+        // Fix: Memberikan nilai fallback agar tidak error 500 jika data kosong
+        const user = await db('User').where({ id: userId }).first() || { balance: 0 };
         const totalSent = await db('MessageLog').where({ userId }).count('id as total').first();
         const pendingWd = await db('Withdraw').where({ userId, status: 'PENDING' }).sum('amount as total').first();
         const totalEarned = await db('MessageLog').where({ userId, status: 'SENT' }).sum('price as total').first();
         const accountsCount = await db('WaAccount').where({ userId }).count('id as total').first();
 
-        // Cari sesi yang aktif
         let connectedCount = 0;
         for (let clientId of activeSessions.keys()) {
             if (clientId.startsWith(`${userId}_`)) connectedCount++;
         }
 
         res.json({ 
-            balance: user ? user.balance : 0,
-            totalSent: parseInt(totalSent.total) || 0,
-            pendingWd: parseInt(pendingWd.total) || 0,
-            totalEarned: parseInt(totalEarned.total) || 0,
-            totalAccounts: parseInt(accountsCount.total) || 0,
+            balance: user.balance,
+            totalSent: parseInt(totalSent?.total) || 0,
+            pendingWd: parseInt(pendingWd?.total) || 0,
+            totalEarned: parseInt(totalEarned?.total) || 0,
+            totalAccounts: parseInt(accountsCount?.total) || 0,
             connectedCount: connectedCount
         });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { 
+        console.error("Stats API Error:", e);
+        res.status(500).json({ error: "Database error saat mengambil statistik." }); 
+    }
 });
 
 app.post('/api/user/withdraw', async (req, res) => {
@@ -148,12 +171,11 @@ app.post('/api/user/withdraw', async (req, res) => {
                 userId, amount, bankInfo, status: 'PENDING', createdAt: new Date()
             });
         });
-        res.json({ message: "Permintaan WD diajukan! Saldo Anda telah dikurangi." });
-    } catch (e) { res.status(500).json({ error: e.message }); }
+        res.json({ message: "Permintaan WD diproses!" });
+    } catch (e) { res.status(500).json({ error: "Gagal memproses penarikan." }); }
 });
 
 // --- 6. ADMIN API ---
-
 app.get('/api/admin/online-sessions', async (req, res) => {
     try {
         let onlineList = [];
@@ -168,18 +190,18 @@ app.get('/api/admin/online-sessions', async (req, res) => {
             });
         }
         res.json(onlineList);
-    } catch (e) { res.status(500).json({ error: e.message }); }
+    } catch (e) { res.status(500).json({ error: "Gagal mengambil data admin." }); }
 });
 
 app.post('/send-message-admin', async (req, res) => {
     const { clientId, receiver, message, imageUrl } = req.body;
     const client = activeSessions.get(clientId);
-    const userId = clientId.split('_')[0];
-
     if (!client) return res.status(404).json({ error: "Sesi Offline" });
 
     try {
+        const userId = clientId.split('_')[0];
         const formatted = `${receiver.replace(/\D/g, '')}@c.us`;
+        
         if (imageUrl) {
             const media = await MessageMedia.fromUrl(imageUrl);
             await client.sendMessage(formatted, media, { caption: message });
