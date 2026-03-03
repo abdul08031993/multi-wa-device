@@ -14,10 +14,36 @@
         .log-window { height: 150px; overflow-y: auto; background: #212529; color: #00ff00; font-family: 'Consolas', monospace; font-size: 12px; padding: 12px; border-radius: 8px; white-space: pre-wrap; }
         .badge-status { font-size: 0.75rem; }
         .progress { height: 8px; border-radius: 10px; }
+#licenseOverlay {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.9);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+.license-box {
+    background: white;
+    padding: 30px;
+    border-radius: 15px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+}
     </style>
 </head>
 <body>
-
+<div id="licenseOverlay">
+    <div class="license-box">
+        <h3>🔐 Admin Authentication</h3>
+        <p class="text-muted">Masukkan kode lisensi untuk mengakses panel ini.</p>
+        <input type="password" id="inputLicense" class="form-control mb-3" placeholder="Ketik Kode Lisensi...">
+        <button class="btn btn-primary w-100" onclick="verifyLicense()">Buka Akses</button>
+        <div id="errorMessage" class="text-danger mt-2 small" style="display:none;">Lisensi Salah!</div>
+    </div>
+</div>
 <nav class="navbar navbar-dark bg-dark mb-4">
     <div class="container-fluid">
         <span class="navbar-brand fw-bold text-danger"><i class="fas fa-shield-alt me-2"></i> MASTER ADMIN PANEL</span>
@@ -270,6 +296,43 @@ async function updatePrice() {
     
     if(res.success) alert("Tarif berhasil diperbarui menjadi Rp " + newPrice);
 }
+    let savedLicense = localStorage.getItem('admin_master_key');
+
+    // Jika sudah ada, langsung coba hilangkan overlay
+    if (savedLicense) {
+        document.getElementById('licenseOverlay').style.display = 'none';
+    }
+
+    async function verifyLicense() {
+        const input = document.getElementById('inputLicense').value;
+        
+        // Kita tes lisensinya dengan memanggil salah satu API ke server
+        const res = await fetch(`/api/admin/users-full?license=${input}`);
+        
+        if (res.ok) {
+            // Jika server bilang OK
+            localStorage.setItem('admin_master_key', input);
+            document.getElementById('licenseOverlay').style.display = 'none';
+            location.reload(); // Refresh untuk load semua data
+        } else {
+            // Jika salah
+            document.getElementById('errorMessage').style.display = 'block';
+        }
+    }
+
+    // 2. Fungsi Load Data (Penting!)
+    // Setiap kali kamu fetch data admin, sertakan kuncinya
+    async function loadAdminData() {
+        const key = localStorage.getItem('admin_master_key');
+        if (!key) return;
+
+        try {
+            const res = await fetch(`/api/admin/users-full?license=${key}`).then(r => r.json());
+            // Render data ke tabel seperti biasa...
+        } catch (e) {
+            console.error("Gagal ambil data. Lisensi mungkin expired.");
+        }
+    }
 
 // Panggil loadCurrentPrice saat window.onload
 window.onload = () => {
