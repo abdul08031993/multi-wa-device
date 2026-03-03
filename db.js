@@ -2,9 +2,18 @@ const knex = require('knex');
 
 const db = knex({
   client: 'pg',
-  connection: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  connection: {
+    connectionString: process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false }
+  },
+  pool: { 
+    min: 2, 
+    max: 10,
+    acquireTimeoutMillis: 30000 // Beri waktu 30 detik untuk mencoba konek
+  }
 });
+
+// ... sisa kode initDb kamu ...
 
 // Fungsi untuk membuat tabel otomatis jika belum ada
 async function initDb() {
