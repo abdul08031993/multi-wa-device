@@ -12,14 +12,10 @@ const { createSession, activeSessions, MessageMedia } = require('./wa-manager');
 const app = express();
 const server = http.createServer(app);
 
-// Konfigurasi Socket.io agar stabil di Railway (Cloud)
 const io = new Server(server, {
-    cors: {
-        origin: "*",
-        methods: ["GET", "POST"]
-    },
+    cors: { origin: "*", methods: ["GET", "POST"] },
     transports: ['websocket', 'polling'],
-    allowEIO3: true // Support untuk client versi lama jika ada
+    allowEIO3: true 
 });
 
 app.use(express.json());
@@ -41,11 +37,9 @@ app.post('/register', async (req, res) => {
             password: hashedPassword,
             balance: 0 
         }).returning(['id', 'username', 'balance']);
-        
         res.json({ userId: newUser.id, username: newUser.username, balance: newUser.balance });
     } catch (e) {
-        console.error("Register Error:", e);
-        res.status(400).json({ error: "Username sudah digunakan atau masalah database!" });
+        res.status(400).json({ error: "Username sudah digunakan!" });
     }
 });
 
@@ -58,89 +52,55 @@ app.post('/login', async (req, res) => {
         } else {
             res.status(401).json({ error: "Username atau password salah!" });
         }
-    } catch (e) {
-        console.error("Login Error:", e);
-        res.status(500).json({ error: "Internal Server Error" });
-    }
+    } catch (e) { res.status(500).json({ error: "Internal Server Error" }); }
 });
 
 // --- DEVICE MANAGEMENT & SOCKET.IO ---
 io.on('connection', (socket) => {
-    console.log('User connected to socket:', socket.id);
-
     socket.on('request_qr', (data) => {
         const { userId, waNumber } = data;
         if (!userId || !waNumber) return;
-        
-        const sessionName = `session_${waNumber}`;
-        console.log(`[SOCKET] Request QR untuk: ${waNumber} dari User: ${userId}`);
-        
-        // Memanggil fungsi createSession dari wa-manager.js
-        createSession(userId, sessionName, io);
-    });
-
-    socket.on('disconnect', () => {
-        console.log('User disconnected from socket');
+        createSession(userId, `session_${waNumber}`, io);
     });
 });
 
 app.post('/api/user/accounts/add', async (req, res) => {
     const { userId, waNumber } = req.body;
-    if (!userId || !waNumber) return res.status(400).json({ error: "Data tidak lengkap!" });
-
     try {
-        const sessionName = `session_${waNumber}`;
         const existing = await db('WaAccount').where({ userId, waNumber }).first();
-        
         if (!existing) {
             await db('WaAccount').insert({
                 userId: parseInt(userId),
                 waNumber,
-                sessionName,
+                sessionName: `session_${waNumber}`,
                 status: 'DISCONNECTED',
                 createdAt: new Date()
             });
         }
-        res.json({ success: true, message: "Nomor terdaftar. Silakan klik tombol 'Scan QR'." });
-    } catch (e) {
-        console.error("Add Account Error:", e);
-        res.status(500).json({ error: "Gagal menyimpan ke database. Pastikan tabel WaAccount sudah benar." });
-    }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Database error" }); }
 });
 
 app.get('/api/user/my-accounts', async (req, res) => {
     const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: "User ID missing" });
-
     try {
         const devices = await db('WaAccount').where({ userId });
-        const updatedDevices = devices.map(dev => {
-            const clientId = `${userId}_session_${dev.waNumber}`;
-            return { 
-                id: dev.id,
-                waNumber: dev.waNumber,
-                sessionName: dev.sessionName,
-                status: activeSessions.has(clientId) ? 'CONNECTED' : 'DISCONNECTED'
-            };
-        });
+        const updatedDevices = devices.map(dev => ({
+            ...dev,
+            status: activeSessions.has(`${userId}_session_${dev.waNumber}`) ? 'CONNECTED' : 'DISCONNECTED'
+        }));
         res.json(updatedDevices);
-    } catch (e) { res.status(500).json({ error: "Gagal mengambil data akun." }); }
+    } catch (e) { res.status(500).json({ error: "Gagal ambil data" }); }
 });
 
-// --- WITHDRAW & STATS ---
+// --- STATS & WITHDRAW ---
 app.get('/api/user/my-stats', async (req, res) => {
     const { userId } = req.query;
-    if (!userId) return res.status(400).json({ error: "User ID missing" });
-
     try {
         const user = await db('User').where({ id: userId }).first() || { balance: 0 };
         const totalSent = await db('MessageLog').where({ userId }).count('id as total').first();
-        
-        // Fix table check: Pastikan tabel-tabel ini sudah kamu buat di terminal tadi!
         const pendingWd = await db('Withdraw').where({ userId, status: 'PENDING' }).sum('amount as total').first();
-        const totalEarned = await db('MessageLog').where({ userId, status: 'SENT' }).sum('price as total').first();
-        const accountsCount = await db('WaAccount').where({ userId }).count('id as total').first();
-
+        
         let connectedCount = 0;
         for (let clientId of activeSessions.keys()) {
             if (clientId.startsWith(`${userId}_`)) connectedCount++;
@@ -150,56 +110,80 @@ app.get('/api/user/my-stats', async (req, res) => {
             balance: user.balance,
             totalSent: parseInt(totalSent?.total) || 0,
             pendingWd: parseInt(pendingWd?.total) || 0,
-            totalEarned: parseInt(totalEarned?.total) || 0,
-            totalAccounts: parseInt(accountsCount?.total) || 0,
             connectedCount: connectedCount
         });
-    } catch (e) { 
-        console.error("Stats API Error:", e);
-        res.status(500).json({ error: "Database error. Cek apakah tabel Withdraw & MessageLog sudah ada." }); 
-    }
+    } catch (e) { res.status(500).json({ error: "Stats error" }); }
 });
 
 app.post('/api/user/withdraw', async (req, res) => {
     const { userId, amount, bankInfo } = req.body;
     try {
         const user = await db('User').where({ id: userId }).first();
-        if (!user || user.balance < amount) return res.status(400).json({ error: "Saldo tidak cukup!" });
+        if (!user || user.balance < amount) return res.status(400).json({ error: "Saldo tipis!" });
 
         await db.transaction(async (trx) => {
             await trx('User').where({ id: userId }).decrement('balance', amount);
-            await trx('Withdraw').insert({
-                userId, amount, bankInfo, status: 'PENDING', createdAt: new Date()
-            });
+            await trx('Withdraw').insert({ userId, amount, bankInfo, status: 'PENDING', createdAt: new Date() });
         });
-        res.json({ message: "Permintaan WD diproses!" });
-    } catch (e) { 
-        console.error("WD Error:", e);
-        res.status(500).json({ error: "Gagal memproses penarikan." }); 
-    }
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "WD error" }); }
 });
 
 // --- ADMIN API ---
+
+// 1. Data Vendor Lengkap (Fixed Query)
+app.get('/api/admin/users-full', async (req, res) => {
+    try {
+        // Menggunakan subquery agar total_sent akurat meski ada ribuan log
+        const users = await db('User')
+            .select('User.id', 'User.username', 'User.balance')
+            .select(db.raw('(SELECT COUNT(*) FROM "MessageLog" WHERE "MessageLog"."userId" = "User"."id") as total_sent'));
+        
+        res.json(users.map(u => ({
+            ...u,
+            total_sent: parseInt(u.total_sent) || 0,
+            balance: parseInt(u.balance) || 0
+        })));
+    } catch (e) { res.status(500).json({ error: "Admin API Error" }); }
+});
+
+// 2. Antrean Withdraw
+app.get('/api/admin/withdraws', async (req, res) => {
+    try {
+        const withdraws = await db('Withdraw')
+            .join('User', 'Withdraw.userId', 'User.id')
+            .select('Withdraw.*', 'User.username')
+            .orderBy('Withdraw.createdAt', 'desc');
+        res.json(withdraws);
+    } catch (e) { res.status(500).json({ error: "WD Admin Error" }); }
+});
+
+// 3. Approve Withdraw
+app.post('/api/admin/approve-wd/:id', async (req, res) => {
+    try {
+        await db('Withdraw').where({ id: req.params.id }).update({ status: 'SUCCESS' });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: "Approve Error" }); }
+});
+
+// 4. Online Sessions
 app.get('/api/admin/online-sessions', async (req, res) => {
     try {
         let onlineList = [];
         for (let [clientId, client] of activeSessions.entries()) {
-            const parts = clientId.split('_');
-            const uId = parts[0];
-            const sName = parts.slice(1).join('_');
-            
+            const uId = clientId.split('_')[0];
             const user = await db('User').where({ id: uId }).first();
             onlineList.push({
                 clientId,
                 username: user ? user.username : 'Unknown',
-                sessionName: sName,
                 waNumber: client.info?.wid?.user || 'Connecting...'
             });
         }
         res.json(onlineList);
-    } catch (e) { res.status(500).json({ error: "Gagal mengambil data admin." }); }
+    } catch (e) { res.status(500).json({ error: "Session Admin Error" }); }
 });
 
+// 5. Blast Engine Admin
 app.post('/send-message-admin', async (req, res) => {
     const { clientId, receiver, message, imageUrl } = req.body;
     const client = activeSessions.get(clientId);
@@ -227,8 +211,5 @@ app.post('/send-message-admin', async (req, res) => {
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// RUN SERVER
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`\x1b[32m[SERVER]\x1b[0m Berjalan di http://localhost:${PORT}`);
-});
+server.listen(PORT, () => console.log(`[SERVER] On Port ${PORT}`));
