@@ -1,68 +1,73 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const db = require('./db');
+const qrcode = require('qrcode'); // Tambahkan ini (install: npm install qrcode)
 const activeSessions = new Map();
 
-/**
- * @param {string} userId - ID User dari database (misal: 1)
- * @param {string} sessionName - Nama sesi pilihan user (misal: 'kantor')
- */
 const createSession = (userId, sessionName, io) => {
-    // Buat ID unik untuk folder session: "1_kantor"
+    // ID Unik untuk folder & tracking
     const clientId = `${userId}_${sessionName}`.replace(/[^a-zA-Z0-9_-]/g, '');
 
     if (activeSessions.has(clientId)) {
         console.log(`[SYSTEM] Sesi ${clientId} sudah aktif.`);
-        io.emit('ready', { clientId });
+        io.emit('connection_success', { clientId });
         return;
     }
-
-    console.log(`[SYSTEM] Menyiapkan browser untuk sesi: ${clientId}`);
 
     const client = new Client({
         authStrategy: new LocalAuth({
             clientId: clientId,
-            dataPath: './sessions' // Semua sesi masuk ke folder ./sessions/session-1_kantor
+            dataPath: './sessions'
         }),
         puppeteer: {
-    headless: true,
-    args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage', // Menghindari crash di VPS/Linux RAM kecil
-        '--disable-gpu'
-    ]
-}
+            headless: true,
+            args: [
+                '--no-sandbox',
+                '--disable-setuid-sandbox',
+                '--disable-dev-shm-usage',
+                '--disable-gpu'
+            ]
+        }
     });
 
-    client.on('qr', (qr) => {
-        console.log(`[QR] Sesi ${clientId} silakan scan.`);
-        io.emit('qr', { clientId, qr });
+    // KIRIM QR KE DASHBOARD
+    client.on('qr', async (qr) => {
+        console.log(`[QR] Sesi ${clientId} siap scan.`);
+        try {
+            // Ubah text QR menjadi Base64 Image agar tag <img> bisa baca
+            const qrImageUrl = await qrcode.toDataURL(qr);
+            // Nama event 'qr_code' harus sama dengan yang ada di index.html
+            io.emit('qr_code', { clientId, qr: qrImageUrl });
+        } catch (err) {
+            console.error("Gagal generate QR Image", err);
+        }
     });
 
     client.on('ready', async () => {
         const waNumber = client.info.wid.user;
         try {
-            // Simpan ke database menggunakan Knex
-            // userId di sini adalah ID User asli (angka) agar Foreign Key valid
             await db('WaAccount')
                 .insert({
                     userId: parseInt(userId),
                     waNumber: waNumber,
-                    status: 'CONNECTED'
+                    sessionName: sessionName,
+                    status: 'CONNECTED',
+                    createdAt: new Date()
                 })
                 .onConflict('waNumber')
                 .merge();
 
             activeSessions.set(clientId, client);
-            io.emit('ready', { clientId, waNumber });
-            console.log(`[SUCCESS] Sesi ${clientId} terhubung dengan nomor ${waNumber}`);
+            // Nama event 'connection_success' harus sama dengan index.html
+            io.emit('connection_success', { clientId, waNumber });
+            console.log(`[SUCCESS] ${clientId} Terhubung!`);
         } catch (err) {
             console.error("[DB ERROR]", err.message);
         }
     });
 
-    client.on('disconnected', () => {
+    client.on('disconnected', async () => {
         activeSessions.delete(clientId);
+        await db('WaAccount').where({ userId, sessionName }).update({ status: 'DISCONNECTED' });
         io.emit('disconnected', { clientId });
     });
 
@@ -72,5 +77,5 @@ const createSession = (userId, sessionName, io) => {
 module.exports = { 
     createSession, 
     activeSessions, 
-    MessageMedia: require('whatsapp-web.js').MessageMedia // Ini penting!
+    MessageMedia 
 };
