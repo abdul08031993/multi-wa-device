@@ -18,6 +18,9 @@ const io = new Server(server, {
     allowEIO3: true 
 });
 
+// KONFIGURASI LISENSI ADMIN (Ganti sesukamu)
+const MASTER_LICENSE_KEY = "sebarin2026"; 
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname))); 
 
@@ -34,7 +37,6 @@ app.get('/api/settings/price', async (req, res) => {
     try {
         let price = await db('Settings').where({ key: 'chat_price' }).first();
         if (!price) {
-            // Jika belum ada di DB, buat default 500
             await db('Settings').insert({ key: 'chat_price', value: '500' });
             price = { value: '500' };
         }
@@ -42,9 +44,11 @@ app.get('/api/settings/price', async (req, res) => {
     } catch (e) { res.json({ price: 500 }); }
 });
 
-// Update price (Hanya Admin)
+// Update price (Hanya Admin dengan Lisensi)
 app.post('/api/admin/settings/update-price', async (req, res) => {
-    const { newPrice } = req.body;
+    const { newPrice, license } = req.body;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Lisensi Salah" });
+
     try {
         await db('Settings').where({ key: 'chat_price' }).update({ value: newPrice.toString() });
         res.json({ success: true });
@@ -153,9 +157,12 @@ app.post('/api/user/withdraw', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "WD error" }); }
 });
 
-// --- ADMIN API ---
+// --- ADMIN API (PROTECTED BY LICENSE) ---
 
 app.get('/api/admin/users-full', async (req, res) => {
+    const { license } = req.query;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Unauthorized" });
+
     try {
         const users = await db('User')
             .select('User.id', 'User.username', 'User.balance')
@@ -170,6 +177,9 @@ app.get('/api/admin/users-full', async (req, res) => {
 });
 
 app.get('/api/admin/withdraws', async (req, res) => {
+    const { license } = req.query;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Unauthorized" });
+
     try {
         const withdraws = await db('Withdraw')
             .join('User', 'Withdraw.userId', 'User.id')
@@ -180,6 +190,9 @@ app.get('/api/admin/withdraws', async (req, res) => {
 });
 
 app.post('/api/admin/approve-wd/:id', async (req, res) => {
+    const { license } = req.body;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Unauthorized" });
+
     try {
         await db('Withdraw').where({ id: req.params.id }).update({ status: 'SUCCESS' });
         res.json({ success: true });
@@ -187,6 +200,9 @@ app.post('/api/admin/approve-wd/:id', async (req, res) => {
 });
 
 app.get('/api/admin/online-sessions', async (req, res) => {
+    const { license } = req.query;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Unauthorized" });
+
     try {
         let onlineList = [];
         for (let [clientId, client] of activeSessions.entries()) {
@@ -202,9 +218,13 @@ app.get('/api/admin/online-sessions', async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Session Admin Error" }); }
 });
 
-// BLAST ENGINE ADMIN DENGAN TARIF DINAMIS
+// BLAST ENGINE ADMIN DENGAN PROTEKSI LISENSI
 app.post('/send-message-admin', async (req, res) => {
-    const { clientId, receiver, message, imageUrl } = req.body;
+    const { clientId, receiver, message, imageUrl, license } = req.body;
+    
+    // Cek Lisensi
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Lisensi Tidak Valid" });
+
     const client = activeSessions.get(clientId);
     if (!client) return res.status(404).json({ error: "Sesi Offline" });
 
