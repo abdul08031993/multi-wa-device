@@ -252,6 +252,21 @@ app.post('/send-message-admin', async (req, res) => {
         res.json({ success: true });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
+app.get('/api/admin/export-sent-logs', async (req, res) => {
+    const { license } = req.query;
+    if (license !== MASTER_LICENSE_KEY) return res.status(401).json({ error: "Unauthorized" });
+
+    try {
+        const logs = await db('MessageLog')
+            .join('User', 'MessageLog.userId', 'User.id')
+            .select('MessageLog.recipient', 'MessageLog.createdAt', 'User.username', 'MessageLog.price')
+            .orderBy('MessageLog.createdAt', 'desc');
+        
+        res.json(logs);
+    } catch (e) {
+        res.status(500).json({ error: "Gagal ekspor data" });
+    }
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`[SERVER] On Port ${PORT}`));
